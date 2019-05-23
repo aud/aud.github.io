@@ -1,25 +1,21 @@
-<html>
+<!DOCTYPE html>
+
+<html lang="en">
   <head>
+    <title>Blog</title>
+    <meta charset="UTF-8">
     <link rel="stylesheet" type="text/css" href="styles.css">
   </head>
   <body>
-    <header>
-      <nav>
-        <ul class="main">
-          <li><a href="https://dohm.dev">Home</a></li>
-        </ul>
-      </nav>
-    </header>
-
     <div class="container home">
       <article>
         <h2>
-          <a href="post/first-post.html" title="foo">Title foo</a>
+          <a href="post/golang-testing-with-interfaces">Golang Testing with Interfaces</a>
         </h2>
 
-        <div class="time">April 1, 2019</div>
+        <div class="time">May 22nd, 2019</div>
 
-        Excerpt from article.
+        <p>Testing with Golang can sometimes get pretty cumbersome when dealing with external packages. For example: what if we want to test some code that writes to the filesystem, or makes a network request? We don’t actually want to perform those operations, as they can oftentimes be resource intensive and difficult to maintain. One way to avoid this is to leverage dependency injection.</p>
       </article>
     </div>
   </body>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <title>Golang Testing with Interfaces</title>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" type="text/css" href="../styles.css">
+  </head>
+
+  <body>
+    <div class="container single">
+      <article>
+        <h1>Golang Testing with Interfaces</h1>
+        <div class="time">May 22nd, 2019</div>
+
+        <p>Testing with Golang can sometimes get pretty cumbersome when dealing with external packages. For example: what if we want to test some code that writes to the filesystem, or makes a network request? We don’t actually want to perform those operations, as they can oftentimes be resource intensive and difficult to maintain. One way to avoid this is to leverage dependency injection.</p>
+        <p>Simply put, dependency injection allows the caller to pass in some resource to the callee which it depends on. In Go, one form of dependency injection is using interfaces. Interfaces allow you to specify a collection of method signatures, which consist of the method name, arguments, and return types. They also describe a contact enforcing whichever type to fully satisfy the interface. For example:</p>
+
+        <pre>
+type I interface {
+    f() (string, error)
+}
+
+type T struct{}
+
+func (T) f() (string, error) {
+    return "", nil
+}
+        </pre>
+
+        <p>In this case we’ve created an interface <code>I</code> that has the method signature for <code>f</code>. We then create a new type <code>T</code>  with a method <code>f</code> that implements it. Now if we were to have a function, all it would need to do is accept a type argument that satisfies the <code>I</code> interface. Interfaces can be very powerful, as they allow us to descibe the behaviour instead of the implementation.</p>
+        <p>Lets take this approach and apply it to a real world example. This is a type of function that is commonly seen in the wild. It creates and writes to a file using the <code>os</code> and <code>io</code> packages.</p>
+
+        <pre>
+func WriteFile(filePath string, contents io.Reader) error {
+    file, err := os.Create(filePath)
+
+    if err != nil {
+        return err
+    }
+
+    defer file.Close()
+
+    if _, err = io.Copy(file, contents); err != nil {
+        return err
+    }
+
+    return nil
+}
+        </pre>
+
+        <p>A common way to test this could be to do something similar to:</p>
+
+        <pre>
+func TestWriteFile(t *testing.T) {
+    buf := bytes.NewReader([]byte("hello world \n"))
+    err := WriteFile("file", buf)
+
+    if err != nil {
+        t.Errorf("got %s", err)
+    }
+}
+        </pre>
+
+        <p>This isn't ideal as now our test is modifying our filesystem. It's common to see <code>tmp</code> or <code>testing</code> directories filled with these test files, which may require cleanup to delete the files created during the test run. By passing an interface to the function instead, any caller can simply pass in an interface that satisfies the implementation. Using dependency injection is also much faster, as we're not doing any IO operations on the disk. This gives us the power to fake out the behaviour in tests to how we see fit.</p>
+
+        <p>The method signature for our function is <code>WriteFile(string, io.Reader) (error)</code>. Lets modify this to instead take an interface which includes the behaviour we need.</p>
+
+        <pre>
+func WriteFile(filePath string, contents io.Reader, fs FileSystem) error {
+    file, err := fs.Create(filePath)
+
+    if err != nil {
+        return err
+    }
+
+    defer file.Close()
+
+    if _, err = fs.Copy(file, contents); err != nil {
+        return err
+    }
+
+    return nil
+}
+        </pre>
+
+        <p>Now, lets implement our filesystem interface.</p>
+
+        <pre>
+type FileSystem interface {
+    Close() error
+    Copy(File, io.Reader) (int64, error)
+    Create(name string) (File, error)
+}
+
+type File interface {
+    io.Closer
+    io.Writer
+}
+
+// Implement methods that delegate to functions in the packages we want to use
+type ownFS struct{}
+
+func (f ownFS) Close() error {
+    return f.Close()
+}
+
+func (ownFS) Copy(f File, contents io.Reader) (int64, error) {
+    return io.Copy(f, contents)
+}
+
+func (ownFS) Create(name string) (File, error) {
+    return os.Create(name)
+}
+        </pre>
+
+        <p>If we rewrote our original test to fit this new implementation, we can create our own mock filesystem that satifies the implementation, and simply pass that to our function.</p>
+        <pre>
+type MockFileSystem struct {
+    expectedFilename string
+}
+
+// For example, our MockFileSystem could contain fields that we use in our mock
+// implementation for assertions.
+func (m MockFileSystem) Create(name string) (File, error) {
+    if m.expectedFilename != name {
+        return nil, errors.New(m.expectedFilename)
+    }
+
+    return m, nil
+}
+
+// Depending on your use case, these implementations could change to
+// include assertions, or whatever other behaviour you'd like.
+func (m MockFileSystem) Close() error                        { return nil }
+func (m MockFileSystem) Copy(File, io.Reader) (int64, error) { return 0, nil }
+func (m MockFileSystem) Write([]byte) (int, error)           { return 0, nil }
+
+func TestWriteFile(t *testing.T) {
+    mockFs := &MockFileSystem{expectedFilename: "file"}
+
+    buf := bytes.NewReader([]byte("hello world \n"))
+    err := WriteFile("file", buf, mockFs)
+
+    if err != nil {
+        t.Errorf("got %s", err)
+    }
+}
+        </pre>
+      </article>
+    </div>
+  </body>
+</html>
